@@ -17,6 +17,14 @@ from .config import MOVES, META_INSTRUCTIONS, META_INSTRUCTIONS_WITH_LOWER
 from .prompts import build_main_prompt, build_system_prompt
 
 
+
+import dashscope
+DASHSCOPE_KEY = os.getenv("DASHSCOPE_KEY")
+if not DASHSCOPE_KEY:
+    raise ValueError("请指定DASHSCOPE_KEY的环境变量")
+dashscope.api_key = DASHSCOPE_KEY
+
+
 def call_llm(
     context_prompt: str,
     character: str,
@@ -31,9 +39,11 @@ def call_llm(
     context_prompt: str, the prompt to describe the situation to the LLM. Will be placed inside the main prompt template.
     """
     # Get the correct provider, default is mistral
-    provider_name, model_name = get_provider_and_model(model)
-    client = get_sync_client(provider_name)
+    # provider_name, model_name = get_provider_and_model(model)
+    # client = get_sync_client(provider_name)
 
+    model = "qwen1.5-72b-chat"
+    top_p = 0.9
     # Generate the prompts
     system_prompt = build_system_prompt(
         character=character, context_prompt=context_prompt
@@ -42,8 +52,8 @@ def call_llm(
 
     start_time = time.time()
 
-    completion = client.chat.completions.create(
-        model=model_name,
+    completion = dashscope.Generation.call(
+        model=model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": main_prompt},
@@ -51,11 +61,14 @@ def call_llm(
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
+        result_format="message"
     )
+
+    logger.debug(f"completion: {completion}")
     logger.debug(f"LLM call to {model}: {system_prompt}\n\n\n{main_prompt}")
     logger.debug(f"LLM call to {model}: {time.time() - start_time} s")
 
-    llm_response = completion.choices[0].message.content.strip()
+    llm_response = completion.output.choices[0].message.content.strip()
 
     return llm_response
 

@@ -211,7 +211,8 @@ class Game:
             return None
         # Recording settings in root directory
         root_dir = os.path.dirname(os.path.abspath(__file__))
-        game_id = "sfiii3n"
+        game_id = "sfiii3n"# "sfiii3n"
+        self.game_id = game_id
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         recording_settings = RecordingSettings()
         recording_settings.dataset_path = os.path.join(
@@ -229,12 +230,12 @@ class Game:
         recorder_settings = self._init_recorder()
         if self.save_game:
             return make(
-                "sfiii3n",
+                self.game_id,
                 settings,
                 render_mode=render_mode,
                 episode_recording_settings=recorder_settings,
             )
-        return make("sfiii3n", settings, render_mode=render_mode)
+        return make(self.game_id, settings, render_mode=render_mode)
 
     def _save(self):
         """
