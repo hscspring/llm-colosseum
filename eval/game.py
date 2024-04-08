@@ -5,8 +5,6 @@ import traceback
 from threading import Thread
 from typing import List, Optional
 
-from agent import KEN_GREEN, KEN_RED, Robot
-from agent.config import MODELS, LANG
 from diambra.arena import (
     EnvironmentSettingsMultiAgent,
     RecordingSettings,
@@ -15,6 +13,8 @@ from diambra.arena import (
 )
 from rich import print
 
+from agent import KEN_GREEN, KEN_RED, Robot
+from agent.config import LANG, MODELS
 
 
 def generate_random_model(glm: bool = False, qwen: bool = True):
@@ -115,9 +115,7 @@ class Episode:
         # Verifty if the file exists
         if not os.path.exists("results.csv"):
             with open("results.csv", "w") as f:
-                f.write(
-                    "id,Language,player_1_model,player_2_model,player_1_won\n"
-                )
+                f.write("id,Language,player_1_model,player_2_model,player_1_won\n")
 
         with open("results.csv", "a") as f:
             f.write(
@@ -338,7 +336,7 @@ class Game:
                         print(
                             f"[green] Player2 {self.player_2.nickname} {self.player_2.robot.model} won!"
                         )
-                        
+
                     episode.save()
                     self.env.close()
                     break

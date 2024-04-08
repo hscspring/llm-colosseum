@@ -5,32 +5,29 @@ import time
 from collections import defaultdict
 from typing import Dict, List, Literal, Optional
 
+import dashscope
 import numpy as np
 from gymnasium import spaces
 from rich import print
 from zhipuai import ZhipuAI
-import dashscope
-
 
 from .config import (
+    DASHSCOPE_KEY,
     INDEX_TO_MOVE,
+    LANG,
     META_INSTRUCTIONS,
     META_INSTRUCTIONS_WITH_LOWER,
     MOVES,
     NB_FRAME_WAIT,
     X_SIZE,
     Y_SIZE,
-    LANG,
-    logger,
     ZHIPU_KEY,
-    DASHSCOPE_KEY
+    logger,
 )
 from .observer import detect_position_from_color
 
 
-
 class QwenClient:
-
     def __init__(self):
         dashscope.api_key = DASHSCOPE_KEY
 
@@ -51,7 +48,7 @@ class QwenClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 top_p=top_p,
-                result_format="message"
+                result_format="message",
             )
             count += 1
             if count > 1:
@@ -60,11 +57,9 @@ class QwenClient:
 
 
 class GlmClient:
-
     def __init__(self):
         self.client = ZhipuAI(api_key=ZHIPU_KEY)
-    
-    
+
     def call(
         self,
         model: str,
@@ -90,13 +85,11 @@ class GlmClient:
         return response
 
 
-
 def get_llm_client(mid: str):
     if "glm" in mid:
         return GlmClient()
     elif "qwen" in mid:
         return QwenClient()
-
 
 
 class Robot:
@@ -291,9 +284,7 @@ class Robot:
         position_prompt = ""
         if abs(normalized_relative_position[0]) > 0.1:
             if LANG == "ZH":
-                position_prompt += (
-                    "你离对手很远。靠近对手。"
-                )    
+                position_prompt += "你离对手很远。靠近对手。"
             else:
                 position_prompt += (
                     "You are very far from the opponent. Move closer to the opponent."
@@ -313,7 +304,9 @@ class Robot:
             if LANG == "ZH":
                 position_prompt += "你离对手很近。你应该攻击他。"
             else:
-                position_prompt += "You are close to the opponent. You should attack him."
+                position_prompt += (
+                    "You are close to the opponent. You should attack him."
+                )
 
         power_prompt = ""
         if super_bar_own >= 30:
@@ -323,7 +316,9 @@ class Robot:
                 power_prompt = "You can now use a powerfull move. The names of the powerful moves are: Megafireball, Super attack 2"
         if super_bar_own >= 120 or super_bar_own == 0:
             if LANG == "ZH":
-                power_prompt = "你现在只能使用非常强大的动作。非常强大的动作的名称是：Super attack 3, Super attack 4"
+                power_prompt = (
+                    "你现在只能使用非常强大的动作。非常强大的动作的名称是：Super attack 3, Super attack 4"
+                )
             else:
                 power_prompt = "You can now only use very powerfull moves. The names of the very powerful moves are: Super attack 3, Super attack 4"
         # Create the last action prompt
@@ -345,7 +340,9 @@ class Robot:
             str_act_opp = INDEX_TO_MOVE[act_opp]
 
             if LANG == "ZH":
-                last_action_prompt += f"你的最后一个动作是 {str_act_own}. 对手的最后一个动作是 {str_act_opp}."
+                last_action_prompt += (
+                    f"你的最后一个动作是 {str_act_own}. 对手的最后一个动作是 {str_act_opp}."
+                )
             else:
                 last_action_prompt += f"Your last action was {str_act_own}. The opponent's last action was {str_act_opp}."
 
@@ -360,9 +357,7 @@ class Robot:
                 score_prompt += "You are winning. Keep attacking the opponent."
         elif reward < 0:
             if LANG == "ZH":
-                score_prompt += (
-                    "你输了。继续攻击对手，但不要被击中。"
-                )
+                score_prompt += "你输了。继续攻击对手，但不要被击中。"
             else:
                 score_prompt += (
                     "You are losing. Continue to attack the opponent but don't get hit."
@@ -478,7 +473,6 @@ Example if the opponent is far:
 再比如，如果对手离你比较远，你就输出：
 - Fireball
 - Move closer"""
-        
 
         user_init = "Your next moves are:"
         user_init_zh = "你接下来的动作要点是（直接输出英文的动作列表，不要任何解释）："
