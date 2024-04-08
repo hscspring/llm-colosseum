@@ -2,7 +2,9 @@ import os
 import sys
 import dotenv
 from loguru import logger
+import logging
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 dotenv.load_dotenv()
 
