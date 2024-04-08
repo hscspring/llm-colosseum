@@ -1,20 +1,23 @@
-import dashscope
-
-dashscope.api_key = "sk-d9bcbecff5854fb09b684d060fc1d656"
+from agent.robot import GlmClient, QwenClient
 
 
-completion = dashscope.Generation.call(
-    model="qwen1.5-72b-chat",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "怎么做蛋炒饭？"},
-    ],
-    temperature=1.0,
-    max_tokens=100,
-    top_p=0.9,
-    result_format="message"
+
+glm = GlmClient()
+qwen = QwenClient()
+
+
+messages=[
+    {"role": "system", "content": "你是一个乐于解答各种问题的助手，你的任务是为用户提供专业、准确、有见地的建议。"},
+    {"role": "user", "content": "我对太阳系的行星非常感兴趣，特别是土星。请提供关于土星的基本信息，包括其大小、组成、环系统和任何独特的天文现象。"},
+]
+
+r1 = glm.call(
+    "glm-4",
+    messages,
 )
-
-
-llm_response = completion.output.choices[0].message.content.strip()
-print(llm_response)
+print(r1)
+r2 = qwen.call(
+    "qwen-max",
+    messages,
+)
+print(r2)

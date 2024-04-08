@@ -1,23 +1,102 @@
-import abc
+import os
+import random
+import re
+import time
 from collections import defaultdict
-import numpy as np
-from typing import Dict, List, Optional, Literal
-from gymnasium import spaces
-from loguru import logger
+from typing import Dict, List, Literal, Optional
 
-from .observer import detect_position_from_color, KEN_RED, KEN_GREEN
-from .actions import get_actions_from_llm
+import numpy as np
+from gymnasium import spaces
+from rich import print
+from zhipuai import ZhipuAI
+import dashscope
+
 
 from .config import (
-    MOVES,
     INDEX_TO_MOVE,
-    X_SIZE,
-    Y_SIZE,
-    NB_FRAME_WAIT,
-    COMBOS,
     META_INSTRUCTIONS,
     META_INSTRUCTIONS_WITH_LOWER,
+    MOVES,
+    NB_FRAME_WAIT,
+    X_SIZE,
+    Y_SIZE,
+    LANG,
+    logger,
+    ZHIPU_KEY,
+    DASHSCOPE_KEY
 )
+from .observer import detect_position_from_color
+
+
+
+class QwenClient:
+
+    def __init__(self):
+        dashscope.api_key = DASHSCOPE_KEY
+
+    def call(
+        self,
+        model: str,
+        messages: List[Dict],
+        temperature: float = 0.95,
+        max_tokens: int = 20,
+        top_p: float = 0.9,
+    ) -> str:
+        response = None
+        count = 0
+        while response is None or response.status_code != 200:
+            response = dashscope.Generation.call(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                result_format="message"
+            )
+            count += 1
+            if count > 1:
+                time.sleep(3)
+        return response.output
+
+
+class GlmClient:
+
+    def __init__(self):
+        self.client = ZhipuAI(api_key=ZHIPU_KEY)
+    
+    
+    def call(
+        self,
+        model: str,
+        messages: List[Dict],
+        temperature: float = 0.95,
+        max_tokens: int = 20,
+        top_p: float = 0.9,
+    ) -> str:
+        response = None
+        count = 0
+        while response is None or response.choices is None:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                stream=False,
+            )
+            count += 1
+            if count > 1:
+                time.sleep(3)
+        return response
+
+
+
+def get_llm_client(mid: str):
+    if "glm" in mid:
+        return GlmClient()
+    elif "qwen" in mid:
+        return QwenClient()
+
 
 
 class Robot:
@@ -122,43 +201,22 @@ class Robot:
         https://www.eventhubs.com/guides/2008/may/09/ryu-street-fighter-3-third-strike-character-guide/
         """
 
-        # Detect own position
-        own_position = self.observations[-1]["character_position"]
-        ennemy_position = self.observations[-1]["ennemy_position"]
-
-        # Note: at the beginning of the game, the position is None
-
         # If we already have a next step, we don't need to plan
         if len(self.next_steps) > 0:
             return
 
-        # Get the context
-        context = self.context_prompt()
-
-        logger.debug(f"Context: {context}")
-
         # Call the LLM to get the next steps
-        next_steps_from_llm = get_actions_from_llm(
-            context,
-            self.character,
-            model=self.model,
-            temperature=0.7,
-            player_nb=self.player_nb,
-        )
-
-        next_button_press = [
+        next_steps_from_llm = self.get_moves_from_llm()
+        next_buttons_to_press = [
             button
             for combo in next_steps_from_llm
             for button in META_INSTRUCTIONS_WITH_LOWER[combo][
                 self.current_direction.lower()
             ]
+            # We add a wait time after each button press
             + [0] * NB_FRAME_WAIT
         ]
-
-        # Add some steps where we just wait
-        # next_button_press.extend([0] * NB_FRAME_WAIT)
-
-        self.next_steps.extend(next_button_press)
+        self.next_steps.extend(next_buttons_to_press)
 
     def observe(self, observation: dict, actions: dict, reward: float):
         """
@@ -205,12 +263,8 @@ class Robot:
                 self.current_direction = "Right"
             else:
                 self.current_direction = "Left"
-            # print(
-            #     f"Character X: {character_position[0]} vs Ennemy X: {ennemy_position[0]}"
-            # )
-            # print(f"Current direction: {self.current_direction}")
 
-    def context_prompt(self):
+    def context_prompt(self) -> str:
         """
         Return a str of the context
 
@@ -236,22 +290,42 @@ class Robot:
 
         position_prompt = ""
         if abs(normalized_relative_position[0]) > 0.1:
-            position_prompt += (
-                "You are very far from the opponent. Move closer to the opponent."
-            )
-            if normalized_relative_position[0] < 0:
-                position_prompt += "Your opponent is on the right."
+            if LANG == "ZH":
+                position_prompt += (
+                    "你离对手很远。靠近对手。"
+                )    
             else:
-                position_prompt += "Your opponent is on the left."
+                position_prompt += (
+                    "You are very far from the opponent. Move closer to the opponent."
+                )
+            if normalized_relative_position[0] < 0:
+                if LANG == "ZH":
+                    position_prompt += "你的对手在右边。"
+                else:
+                    position_prompt += "Your opponent is on the right."
+            else:
+                if LANG == "ZH":
+                    position_prompt += "你的对手在左边。"
+                else:
+                    position_prompt += "Your opponent is on the left."
 
         else:
-            position_prompt += "You are close to the opponent. You should attack him."
+            if LANG == "ZH":
+                position_prompt += "你离对手很近。你应该攻击他。"
+            else:
+                position_prompt += "You are close to the opponent. You should attack him."
 
         power_prompt = ""
         if super_bar_own >= 30:
-            power_prompt = "You can now use a powerfull move. The names of the powerful moves are: Megafireball, Super attack 2."
+            if LANG == "ZH":
+                power_prompt = "您现在可以使用强大的动作。强大动作的名称是：Megafireball, Super attack 2"
+            else:
+                power_prompt = "You can now use a powerfull move. The names of the powerful moves are: Megafireball, Super attack 2"
         if super_bar_own >= 120 or super_bar_own == 0:
-            power_prompt = "You can now only use very powerfull moves. The names of the very powerful moves are: Super attack 3, Super attack 4"
+            if LANG == "ZH":
+                power_prompt = "你现在只能使用非常强大的动作。非常强大的动作的名称是：Super attack 3, Super attack 4"
+            else:
+                power_prompt = "You can now only use very powerfull moves. The names of the very powerful moves are: Super attack 3, Super attack 4"
         # Create the last action prompt
         last_action_prompt = ""
         if len(self.previous_actions.keys()) >= 0:
@@ -270,18 +344,29 @@ class Robot:
             str_act_own = INDEX_TO_MOVE[act_own]
             str_act_opp = INDEX_TO_MOVE[act_opp]
 
-            last_action_prompt += f"Your last action was {str_act_own}. The opponent's last action was {str_act_opp}."
+            if LANG == "ZH":
+                last_action_prompt += f"你的最后一个动作是 {str_act_own}. 对手的最后一个动作是 {str_act_opp}."
+            else:
+                last_action_prompt += f"Your last action was {str_act_own}. The opponent's last action was {str_act_opp}."
 
         reward = self.reward
 
         # Create the score prompt
         score_prompt = ""
         if reward > 0:
-            score_prompt += "You are winning. Keep attacking the opponent."
+            if LANG == "ZH":
+                score_prompt += "你赢了。继续攻击对手。"
+            else:
+                score_prompt += "You are winning. Keep attacking the opponent."
         elif reward < 0:
-            score_prompt += (
-                "You are losing. Continue to attack the opponent but don't get hit."
-            )
+            if LANG == "ZH":
+                score_prompt += (
+                    "你输了。继续攻击对手，但不要被击中。"
+                )
+            else:
+                score_prompt += (
+                    "You are losing. Continue to attack the opponent but don't get hit."
+                )
 
         # Assemble everything
         context = f"""{position_prompt}
@@ -290,5 +375,129 @@ class Robot:
 Your current score is {reward}. {score_prompt}
 To increase your score, move toward the opponent and attack the opponent. To prevent your score from decreasing, don't get hit by the opponent.
 """
+        context_zh = f"""{position_prompt}
+{power_prompt}
+{last_action_prompt}
+你当前的分数是 {reward}。 {score_prompt}
+为了增加你的分数，向对手移动并攻击对手。为了防止你的分数下降，不要被对手击中。
+"""
 
+        if LANG == "ZH":
+            context = context_zh
         return context
+
+    def get_moves_from_llm(
+        self,
+    ) -> List[str]:
+        """
+        Get a list of moves from the language model.
+        """
+
+        # Filter the moves that are not in the list of moves
+        invalid_moves = []
+        valid_moves = []
+
+        # If we are in the test environment, we don't want to call the LLM
+        if os.getenv("DISABLE_LLM", "False") == "True":
+            # Choose a random int from the list of moves
+            logger.debug("DISABLE_LLM is True, returning a random move")
+            return [random.choice(list(MOVES.values()))]
+
+        while len(valid_moves) == 0:
+            llm_response = self.call_llm()
+
+            # The response is a bullet point list of moves. Use regex
+            matches = re.findall(r"- ([\w ]+)", llm_response)
+            moves = ["".join(match) for match in matches]
+            invalid_moves = []
+            valid_moves = []
+            for move in moves:
+                cleaned_move_name = move.strip().lower()
+                if cleaned_move_name in META_INSTRUCTIONS_WITH_LOWER.keys():
+                    if self.player_nb == 1:
+                        print(
+                            f"[red] Player {self.player_nb} move: {cleaned_move_name}"
+                        )
+                    elif self.player_nb == 2:
+                        print(
+                            f"[green] Player {self.player_nb} move: {cleaned_move_name}"
+                        )
+                    valid_moves.append(cleaned_move_name)
+                else:
+                    logger.debug(f"Invalid completion: {move}")
+                    logger.debug(f"Cleaned move name: {cleaned_move_name}")
+                    invalid_moves.append(move)
+
+            if len(invalid_moves) > 1:
+                logger.warning(f"Many invalid moves: {invalid_moves}")
+
+        logger.debug(f"Next moves: {valid_moves}")
+        return valid_moves
+
+    def call_llm(
+        self,
+        temperature: float = 0.95,
+        max_tokens: int = 50,
+        top_p: float = 0.9,
+    ) -> str:
+        """
+        Make an API call to the language model.
+
+        Edit this method to change the behavior of the robot!
+        """
+        client = get_llm_client(self.model)
+
+        # Generate the prompts
+        move_list = "- " + "\n- ".join([move for move in META_INSTRUCTIONS])
+        system_prompt = f"""You are the best and most aggressive Street Fighter III 3rd strike player in the world.
+Your character is {self.character}. Your goal is to beat the other opponent. You respond with a bullet point list of moves.
+{self.context_prompt()}
+The moves you can use are:
+{move_list}
+----
+Reply with a bullet point list of moves. The format should be: `- <name of the move>` separated by a new line.
+Example if the opponent is close:
+- Move closer
+- Medium Punch
+
+Example if the opponent is far:
+- Fireball
+- Move closer"""
+
+        system_prompt_zh = f"""你是世界上最好、最具侵略性的街头霸王 III 3rd Strike 玩家。
+你的角色是 {self.character}。 你的目标是击败另一个对手。你用一个动作列表来做出响应。
+{self.context_prompt()}
+你可以使用的动作如下：
+{move_list}
+----
+回复一个动作列表。格式应为：“- <动作名称>，用换行分隔。
+比如，如果对手离你比较近，你就输出：
+- Move closer
+- Medium Punch
+
+再比如，如果对手离你比较远，你就输出：
+- Fireball
+- Move closer"""
+        
+
+        user_init = "Your next moves are:"
+        user_init_zh = "你接下来的动作要点是（直接输出英文的动作列表，不要任何解释）："
+        if LANG == "ZH":
+            system_prompt = system_prompt_zh
+            user_init = user_init_zh
+        start_time = time.time()
+        completion = client.call(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_init},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+        )
+        logger.debug(f"LLM call to {self.model}: {system_prompt}")
+        logger.debug(f"LLM call to {self.model}: {time.time() - start_time}s")
+        llm_response = completion.choices[0].message.content.strip()
+        logger.debug(f"\n\n[yellow] LLM {self.model} generate:\n{llm_response}\n\n")
+        return llm_response

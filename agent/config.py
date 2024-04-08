@@ -1,15 +1,41 @@
+import os
+import sys
+import dotenv
+from loguru import logger
+
+
+dotenv.load_dotenv()
+
+LANG = os.getenv("LAN") or "EN"
+LANG = LANG.upper()
+print(f"Language: {LANG}")
+
+
+LOG = os.getenv("LOG") or "info"
+LOG = LOG.upper()
+print(f"LOG Level: {LOG}")
+logger.remove()
+logger.add(sys.stdout, level=LOG)
+
+
+ZHIPU_KEY = os.getenv("ZHIPU_KEY")
+DASHSCOPE_KEY = os.getenv("DASHSCOPE_KEY")
+if not DASHSCOPE_KEY or not ZHIPU_KEY:
+    raise ValueError("请指定DASHSCOPE_KEY和ZHIPU_KEY的环境变量")
+
+
 MODELS = {
-    "OPENAI": {
-        "openai:gpt-4-0125-preview",
-        "openai:gpt-4",
-        "openai:gpt-3.5-turbo-0125",
-        # "openai:gpt-3.5-turbo-instruct", # not a chat model
+    "GLM": {
+        "glm-4",
+        "glm-3-turbo",
     },
-    "MISTRAL": {
-        "mistral:mistral-small-latest",
-        "mistral:mistral-medium-latest",
-        "mistral:mistral-large-latest",
-        # "groq:mistral-8x6b-32768",
+    "QWEN": {
+        "qwen-plus",
+        "qwen-turbo",
+        "qwen1.5-72b-chat",
+        "qwen1.5-14b-chat",
+        "qwen1.5-7b-chat",
+        "qwen1.5-1.8b-chat",
     },
 }
 
@@ -139,6 +165,7 @@ META_INSTRUCTIONS = {
         if "Punch" in move_name or "Kick" in move_name
     },
     "Jump Closer": {"right": [4, 4, 4, 4], "left": [2, 2, 2, 2]},
+    "Jump Away": {"right": [2, 2, 2, 2], "left": [4, 4, 4, 4]},
 }
 META_INSTRUCTIONS_WITH_LOWER = {
     **META_INSTRUCTIONS,
