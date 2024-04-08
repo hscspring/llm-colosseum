@@ -9,5 +9,5 @@ results.csv
 results/
 
 .DS_Store
-*.npz
+*.npy
 demo.py
