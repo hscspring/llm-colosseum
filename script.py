@@ -1,8 +1,9 @@
 import os
 import sys
 
-from agent.config import MODELS
-from eval.game import Game, Player1, Player2, generate_random_model
+
+from agent.llm import MODELS, generate_random_model
+from eval.game import Game, Player1, Player2
 
 
 def main():

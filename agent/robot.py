@@ -5,14 +5,11 @@ import time
 from collections import defaultdict
 from typing import Dict, List, Literal, Optional
 
-import dashscope
 import numpy as np
 from gymnasium import spaces
 from rich import print
-from zhipuai import ZhipuAI
 
 from .config import (
-    DASHSCOPE_KEY,
     INDEX_TO_MOVE,
     LANG,
     META_INSTRUCTIONS,
@@ -21,75 +18,11 @@ from .config import (
     NB_FRAME_WAIT,
     X_SIZE,
     Y_SIZE,
-    ZHIPU_KEY,
     logger,
 )
 from .observer import detect_position_from_color
+from .llm import get_llm_client
 
-
-class QwenClient:
-    def __init__(self):
-        dashscope.api_key = DASHSCOPE_KEY
-
-    def call(
-        self,
-        model: str,
-        messages: List[Dict],
-        temperature: float = 0.95,
-        max_tokens: int = 20,
-        top_p: float = 0.9,
-    ) -> str:
-        response = None
-        count = 0
-        while response is None or response.status_code != 200:
-            response = dashscope.Generation.call(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                result_format="message",
-            )
-            count += 1
-            if count > 1:
-                time.sleep(3)
-        return response.output
-
-
-class GlmClient:
-    def __init__(self):
-        self.client = ZhipuAI(api_key=ZHIPU_KEY)
-
-    def call(
-        self,
-        model: str,
-        messages: List[Dict],
-        temperature: float = 0.95,
-        max_tokens: int = 20,
-        top_p: float = 0.9,
-    ) -> str:
-        response = None
-        count = 0
-        while response is None or response.choices is None:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                stream=False,
-            )
-            count += 1
-            if count > 1:
-                time.sleep(3)
-        return response
-
-
-def get_llm_client(mid: str):
-    if "glm" in mid:
-        return GlmClient()
-    elif "qwen" in mid:
-        return QwenClient()
 
 
 class Robot:
@@ -480,7 +413,7 @@ Example if the opponent is far:
             system_prompt = system_prompt_zh
             user_init = user_init_zh
         start_time = time.time()
-        completion = client.call(
+        llm_response = client.call(
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -492,6 +425,5 @@ Example if the opponent is far:
         )
         logger.debug(f"LLM call to {self.model}: {system_prompt}")
         logger.debug(f"LLM call to {self.model}: {time.time() - start_time}s")
-        llm_response = completion.choices[0].message.content.strip()
         logger.debug(f"\n\n[yellow] LLM {self.model} generate:\n{llm_response}\n\n")
         return llm_response

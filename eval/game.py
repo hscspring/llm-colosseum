@@ -14,23 +14,8 @@ from diambra.arena import (
 from rich import print
 
 from agent import KEN_GREEN, KEN_RED, Robot
-from agent.config import LANG, MODELS
+from agent.config import LANG
 
-
-def generate_random_model(glm: bool = False, qwen: bool = True):
-    models_available = []
-
-    for model, models in MODELS.items():
-        if qwen and model == "GLM":
-            models_available.extend(models)
-        if glm and model == "QWEN":
-            models_available.extend(models)
-
-    random.seed()
-    # Generate a pair of random two models
-    random_model = random.choice(models_available)
-
-    return random_model
 
 
 class Player:

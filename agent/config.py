@@ -21,26 +21,6 @@ logger.remove()
 logger.add(sys.stdout, level=LOG)
 
 
-ZHIPU_KEY = os.getenv("ZHIPU_KEY")
-DASHSCOPE_KEY = os.getenv("DASHSCOPE_KEY")
-if not DASHSCOPE_KEY or not ZHIPU_KEY:
-    raise ValueError("请指定DASHSCOPE_KEY和ZHIPU_KEY的环境变量")
-
-
-MODELS = {
-    "GLM": {
-        "glm-4",
-        "glm-3-turbo",
-    },
-    "QWEN": {
-        "qwen-plus",
-        "qwen-turbo",
-        "qwen1.5-72b-chat",
-        "qwen1.5-14b-chat",
-        "qwen1.5-7b-chat",
-        "qwen1.5-1.8b-chat",
-    },
-}
 
 
 MOVES = {

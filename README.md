@@ -9,6 +9,6 @@ run:
 # add your key
 source .env
 # run
-LAN=zh LOG=debug diambra -r ~/.diambra/roms run python3.11 script.py  glm-3-turbo glm-4
+LAN=zh LOG=debug diambra -r ~/.diambra/roms --env.image diambra/engine:latest run python3.11 script.py  glm-3-turbo qwen-turbo
 ```
 
